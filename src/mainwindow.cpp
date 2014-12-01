@@ -66,9 +66,23 @@ bool MainWindow::becomeService()
 
     qDebug() << "Start to registering service and run rfcomm server";
 
-    if (localDevice.isValid()) {
+    switch (localDevice.hostMode())
+    {
+        case QBluetoothLocalDevice::HostPoweredOff:
+            qDebug() << "Host mode: host powered off";
+            break;
+        case QBluetoothLocalDevice::HostConnectable:
+            qDebug() << "Host mode: host connectable";
+            break;
+        case QBluetoothLocalDevice::HostDiscoverable:
+            qDebug() << "Host mode: host discoverable";
+            break;
+        case QBluetoothLocalDevice::HostDiscoverableLimitedInquiry:
+            qDebug() << "Host mode: host discoverable limited inquiry";
+            break;
+    }
 
-        bool listen_status;
+    if (localDevice.isValid()) {
 
         qDebug() << "Host name: " << localDevice.name();
         qDebug() << "Host adress: " << localDevice.address().toString();
@@ -80,46 +94,42 @@ bool MainWindow::becomeService()
 
         m_rfcommServer = new QBluetoothServer(QBluetoothServiceInfo::RfcommProtocol, this);
         connect(m_rfcommServer, SIGNAL(newConnection()), this, SLOT(clientConnected()));
-        listen_status = m_rfcommServer->listen(localDevice.address());
 
-        qDebug() << "Sever listen status: " << QString::number(listen_status);
+        qDebug() << "Sever listen status: " << QString::number(m_rfcommServer->listen(localDevice.address()));
         qDebug() << "Server listening port: " << QString::number(m_rfcommServer->serverPort());
 
         this->m_serviceInfo = new QBluetoothServiceInfo();
 
-        QBluetoothServiceInfo::Sequence classId;
-        //QBluetoothUuid serviceUuid = QBluetoothUuid(QBluetoothUuid::Rfcomm);
-        QBluetoothUuid serviceUuid = QBluetoothUuid(QLatin1String("e8e10f95-1a70-4b27-9ccf-02010264e9c8"));
+        QBluetoothUuid serviceUuid = QBluetoothUuid(QBluetoothUuid::Rfcomm);
+        //QBluetoothUuid serviceUuid = QBluetoothUuid(QLatin1String("e8e10f95-1a70-4b27-9ccf-02010264e9c8"));
 
         qDebug() << "Service UUID: " << serviceUuid.toString();
 
+        this->m_serviceInfo->setAttribute(QBluetoothServiceInfo::ServiceName, tr("Blurtooth Messenger"));
+        this->m_serviceInfo->setAttribute(QBluetoothServiceInfo::BrowseGroupList, QBluetoothUuid(QBluetoothUuid::PublicBrowseGroup));
+
+        QBluetoothServiceInfo::Sequence classId;
         classId << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::SerialPort));
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::BluetoothProfileDescriptorList, classId);
+        this->m_serviceInfo->setAttribute(QBluetoothServiceInfo::BluetoothProfileDescriptorList, classId);
 
-        classId.prepend(QVariant::fromValue(QBluetoothUuid(serviceUuid)));
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::ServiceClassIds, classId);
-
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::ServiceName, "Bt Messager Server");
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::ServiceDescription, "Simple bluetooth message server");
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::ServiceProvider, "vstu.ru");
-
-        m_serviceInfo->setServiceUuid(QBluetoothUuid(serviceUuid));
-
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::BrowseGroupList, QBluetoothUuid(QBluetoothUuid::PublicBrowseGroup));
+        //Android requires custom uuid to be set as service class
+        classId.prepend(QVariant::fromValue(serviceUuid));
+        this->m_serviceInfo->setAttribute(QBluetoothServiceInfo::ServiceClassIds, classId);
+        this->m_serviceInfo->setServiceUuid(serviceUuid);
 
         QBluetoothServiceInfo::Sequence protocolDescriptorList;
         QBluetoothServiceInfo::Sequence protocol;
-        //protocol << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::L2cap));
-        //protocolDescriptorList.append(QVariant::fromValue(protocol));
-        //protocol.clear();
-        protocol << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::Rfcomm))
-                 << QVariant::fromValue(quint8(m_rfcommServer->serverPort()));
+
+        protocol << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::L2cap));
         protocolDescriptorList.append(QVariant::fromValue(protocol));
-        m_serviceInfo->setAttribute(QBluetoothServiceInfo::ProtocolDescriptorList, protocolDescriptorList);
+        protocol.clear();
+        protocol << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::Rfcomm))
+                 << QVariant::fromValue(quint8(this->m_rfcommServer->serverPort()));
+        protocolDescriptorList.append(QVariant::fromValue(protocol));
+        this->m_serviceInfo->setAttribute(QBluetoothServiceInfo::ProtocolDescriptorList, protocolDescriptorList);
 
-        m_serviceInfo->registerService(localDevice.address());
 
-        qDebug() << "Service registered";
+        qDebug() << "Service registered" << QString::number(m_serviceInfo->registerService());
         return true;
 
     } else {
@@ -169,6 +179,7 @@ void MainWindow::clientDisconnected()
 void MainWindow::startClient()
 {
     const QBluetoothServiceInfo remoteService = this->ui->serviceListBox->currentData().value<QBluetoothServiceInfo>();
+    QBluetoothLocalDevice localDevice;
 
     if (this->m_socket) {
         qDebug() << "Socket already exist";
@@ -181,6 +192,35 @@ void MainWindow::startClient()
     qDebug() << "Service host address: " << remoteService.device().address().toString();
     qDebug() << "Service name: " << remoteService.serviceName();
     qDebug() << "Service UUID: " << remoteService.serviceUuid().toString();
+
+    switch (localDevice.hostMode())
+    {
+        case QBluetoothLocalDevice::HostPoweredOff:
+            qDebug() << "Host mode: host powered off";
+            break;
+        case QBluetoothLocalDevice::HostConnectable:
+            qDebug() << "Host mode: host connectable";
+            break;
+        case QBluetoothLocalDevice::HostDiscoverable:
+            qDebug() << "Host mode: host discoverable";
+            break;
+        case QBluetoothLocalDevice::HostDiscoverableLimitedInquiry:
+            qDebug() << "Host mode: host discoverable limited inquiry";
+            break;
+    }
+
+    switch (localDevice.pairingStatus(remoteService.device().address()))
+    {
+        case QBluetoothLocalDevice::Unpaired:
+            qDebug() << "Pairing status: unpaired";
+            break;
+        case QBluetoothLocalDevice::Paired:
+            qDebug() << "Pairing status: paired";
+            break;
+        case QBluetoothLocalDevice::AuthorizedPaired:
+            qDebug() << "Pairing status: authorized paired";
+            break;
+    }
 
     qDebug() << "Creating socket";
 
