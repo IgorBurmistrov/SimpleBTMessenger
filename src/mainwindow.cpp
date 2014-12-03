@@ -3,6 +3,7 @@
 
 #include <QtBluetooth/QBluetoothLocalDevice>
 #include <QtBluetooth/QBluetoothHostInfo>
+#include <QtBluetooth/QBluetoothUuid>
 #include <QMessageBox>
 #include <QDebug>
 #include <QString>
@@ -27,6 +28,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(this, SIGNAL(messageReceived(QString)), this->ui->messageLine, SLOT(setText(QString)));
     connect(this->m_serviceDiscoveryAgent, SIGNAL(serviceDiscovered(QBluetoothServiceInfo)), this, SLOT(addService(QBluetoothServiceInfo)));
     connect(this->m_serviceDiscoveryAgent, SIGNAL(finished()), this, SLOT(finishScaning()));
+
+    qDebug() << "Count of local devices: " << QString::number(QBluetoothLocalDevice::allDevices().count());
 }
 
 MainWindow::~MainWindow()
@@ -51,18 +54,23 @@ void MainWindow::startScaning()
 
 void MainWindow::finishScaning()
 {
-    qDebug() <<  "Scan for services finished. Find " << QString::number(this->m_serviceDiscoveryAgent->discoveredServices().count()) << " services";
+    qDebug() << "Scan for services finished. Find " << QString::number(this->m_serviceDiscoveryAgent->discoveredServices().count()) << " services";
+    qDebug() << "Saved services: " << QString::number(this->ui->serviceListBox->count());
 }
 
 void MainWindow::addService(const QBluetoothServiceInfo & info)
 {
-    this->ui->serviceListBox->setVisible(true);
-    this->ui->serviceListBox->addItem(info.serviceUuid().toString(), QVariant::fromValue(info));
+    //QBluetoothUuid nullUUID = QBluetoothUuid();
+    //if (info.serviceUuid() != nullUUID) {
+        this->ui->serviceListBox->setVisible(true);
+        this->ui->serviceListBox->addItem(info.serviceUuid().toString(), QVariant::fromValue(info));
+    //}
 }
 
 bool MainWindow::becomeService()
 {
     QBluetoothLocalDevice localDevice;
+    bool result;
 
     qDebug() << "Start to registering service and run rfcomm server";
 
@@ -84,8 +92,10 @@ bool MainWindow::becomeService()
 
     if (localDevice.isValid()) {
 
-        qDebug() << "Host name: " << localDevice.name();
-        qDebug() << "Host adress: " << localDevice.address().toString();
+        const QBluetoothHostInfo info = QBluetoothHostInfo();
+
+        qDebug() << "Host name: " << info.name();
+        qDebug() << "Host adress: " << info.address().toString();
 
         if (m_rfcommServer) {
             qDebug() << "Rfcomm server already exist";
@@ -95,13 +105,15 @@ bool MainWindow::becomeService()
         m_rfcommServer = new QBluetoothServer(QBluetoothServiceInfo::RfcommProtocol, this);
         connect(m_rfcommServer, SIGNAL(newConnection()), this, SLOT(clientConnected()));
 
-        qDebug() << "Sever listen status: " << QString::number(m_rfcommServer->listen(localDevice.address()));
+        result = m_rfcommServer->listen(info.address());
+
+        qDebug() << "Sever listen status: " << QString::number(result);
         qDebug() << "Server listening port: " << QString::number(m_rfcommServer->serverPort());
 
         this->m_serviceInfo = new QBluetoothServiceInfo();
 
-        QBluetoothUuid serviceUuid = QBluetoothUuid(QBluetoothUuid::Rfcomm);
-        //QBluetoothUuid serviceUuid = QBluetoothUuid(QLatin1String("e8e10f95-1a70-4b27-9ccf-02010264e9c8"));
+        //QBluetoothUuid serviceUuid = QBluetoothUuid(QBluetoothUuid::Rfcomm);
+        QBluetoothUuid serviceUuid = QBluetoothUuid(QLatin1String("00001101-0000-1000-8000-00805F9B34FB"));
 
         qDebug() << "Service UUID: " << serviceUuid.toString();
 
@@ -128,8 +140,9 @@ bool MainWindow::becomeService()
         protocolDescriptorList.append(QVariant::fromValue(protocol));
         this->m_serviceInfo->setAttribute(QBluetoothServiceInfo::ProtocolDescriptorList, protocolDescriptorList);
 
+        result =  m_serviceInfo->registerService();
+        qDebug() << "Service registered " << QString::number(result);
 
-        qDebug() << "Service registered" << QString::number(m_serviceInfo->registerService());
         return true;
 
     } else {
